@@ -1,5 +1,5 @@
 """
-Preprocess dataset for countdown task - given a target number and N numbers, generate equations to reach target
+Preprocess dataset for simlin2 task - solve a system of two linear equations with integer coefficients
 """
 
 import re
