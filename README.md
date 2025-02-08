@@ -1,5 +1,5 @@
 # TinyZero
-![image](cover.png)
+![image](simlin2_integer.png)
 
 TinyZero is a reproduction of [DeepSeek R1 Zero](https://github.com/deepseek-ai/DeepSeek-R1) in countdown and multiplication tasks. We built upon [veRL](https://github.com/volcengine/verl).
 
@@ -32,6 +32,14 @@ pip install -e .
 pip3 install flash-attn --no-build-isolation
 # quality of life
 pip install wandb IPython matplotlib
+```
+
+## Linear System of Equations task
+
+**Data Preparation**
+```
+conda activate zero
+python ./examples/data_preprocess/linear2.py --local_dir {path_to_your_dataset}
 ```
 
 ## Countdown task
