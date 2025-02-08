@@ -3,9 +3,9 @@
 
 TinyZero is a reproduction of [DeepSeek R1 Zero](https://github.com/deepseek-ai/DeepSeek-R1) in countdown and multiplication tasks. We built upon [veRL](https://github.com/volcengine/verl).
 
-Through RL, the 3B base LM develops self-verification and search abilities all on its own 
+Through RL, the 3B base LM develops self-verification and search abilities all on its own
 
-You can experience the Ahah moment yourself for < $30 
+You can experience the Ahah moment yourself for < $30
 
 Twitter thread: https://x.com/jiayi_pirate/status/1882839370505621655
 
@@ -24,6 +24,8 @@ pip3 install vllm==0.6.3 # or you can install 0.5.4, 0.4.2 and 0.3.1
 pip3 install ray
 
 # verl
+git clone <this repo>
+cd TinyZero
 pip install -e .
 
 # flash attention 2
@@ -78,11 +80,13 @@ bash ./scripts/train_tiny_zero.sh
 
 ### Instruct Ablation
 We experiment with QWen-2.5-3B Instruct too.
+
 **Data Preparation**
 To follow chat template, we need to reprocess the data:
 ```
 conda activate zero
 python examples/data_preprocess/countdown.py --template_type=qwen-instruct --local_dir={path_to_your_dataset}
+python examples/data_preprocess/linear2.py --template_type=qwen-instruct --local_dir={path_to_your_dataset}
 ```
 
 **Training**
