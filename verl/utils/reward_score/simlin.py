@@ -10,13 +10,19 @@ def extract_equation(numbers_str):
         "numbers": f"A: {example['A']}, b: {example['b']}"
         Example: 'numbers': 'A: [6, 27, 95, 442], b: [4, 19]'
     """
-    coeff_pattern = r'\[[\d,\.\s]+\]'
-    match = re.findall(coeff_pattern, numbers_str)
-    matches = list(match)
-    coeffs = eval(matches[0], {"__builtins__": None}, {})
-    rhs = eval(matches[1], {"__builtins__": None}, {})
-    return coeffs, rhs
-
+    coeff_pattern = r'\[[\d,\.\s\-]+\]'
+    try:
+        match = re.findall(coeff_pattern, numbers_str)
+        matches = list(match)
+        coeffs = eval(matches[0], {"__builtins__": None}, {})
+        rhs = eval(matches[1], {"__builtins__": None}, {})
+        return coeffs, rhs
+    except Exception as e:
+        print(e)
+        print(f"Input: {numbers_str}")
+        match = re.findall(coeff_pattern, numbers_str)
+        matches = list(match)
+        print(matches)
 
 def extract_solution(solution_str):
     """Extract the equation from the solution string."""

@@ -62,8 +62,8 @@ def gen_dataset(
                 x = round(x, 2)
                 y = round(y, 2)
                 # adjust the rhs
-                b1 = a11 * x + a12 * y
-                b2 = a21 * x + a22 * y
+                # b1 = a11 * x + a12 * y
+                # b2 = a21 * x + a22 * y
 
             samples.append((a11, a12, a21, a22, b1, b2, x, y))
 
@@ -82,7 +82,7 @@ def gen_dataset(
         assert abs(y-y0) < tolerance, f'Y: {y} != {y0}'
         df['A'].append(f"[{a11}, {a12}, {a21}, {a22}]")
         df['b'].append(f"[{b1}, {b2}]")
-        df['x'].append(f"[{x:.0f}, {y:.0f}]")
+        df['x'].append(f"[{x:.2f}, {y:.2f}]")
     return df
 
 
@@ -133,8 +133,8 @@ if __name__ == '__main__':
 
     elif args.complexity == "mixed":
         # Make a combination of difficulties
-        train_dataset = gen_dataset(num_samples=TRAIN_SIZE//2, seed_value=100, real_soln=True)
-        test_dataset = gen_dataset(num_samples=TEST_SIZE//2, seed_value=200, real_soln=True)
+        train_dataset = gen_dataset(num_samples=TRAIN_SIZE//2, seed_value=100, real_soln=True, tolerance=1e-01)
+        test_dataset = gen_dataset(num_samples=TEST_SIZE//2, seed_value=200, real_soln=True, tolerance=1e-01)
         train_dataset_2 = gen_dataset(num_samples=TRAIN_SIZE//2, seed_value=100, real_soln=False)
         test_dataset_2 = gen_dataset(num_samples=TEST_SIZE//2, seed_value=200, real_soln=False)
         for k in train_dataset:
