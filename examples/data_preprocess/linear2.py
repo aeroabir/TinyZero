@@ -16,6 +16,8 @@ def gen_dataset(
     min_number: int = 1,
     max_number: int = 100,
     seed_value: int = 42,
+    real_soln: bool = False,
+    tolerance: float = 1e-06
 ) -> Dict:
     """
         Generate dataset for simultaneous linear equation solution task
@@ -24,7 +26,7 @@ def gen_dataset(
         min_number: Minimum value for provided numbers
         max_number: Maximum value for provided numbers
         seed_value: Random seed for reproducibility
-
+        real_soln: Boolean flag to indicate whether the solutions should be integer or not
     Returns:
         List of tuples containing (target, numbers, solution)
     """
@@ -33,6 +35,8 @@ def gen_dataset(
     seed(seed_value)
     samples = []
     df = {'A': [], 'b': [], 'x': []}
+    min_x_number, max_x_number = -min_number, max_number
+    min_y_number, max_y_number = -min_number, max_number
     while count < num_samples:
         a11 = randint(min_number, max_number)
         a12 = randint(min_number, max_number)
@@ -42,27 +46,40 @@ def gen_dataset(
         a22 = randint(1, 100)
         if a11*a22 - a12*a21 != 0:
             count += 1
-            x = randint(min_number, max_number)  # TODO: change to include negative/zero solution
-            y = randint(max_number, max_number)
-            b1 = a11 * x + a12 * y
-            b2 = a21 * x + a22 * y
-            # b1 = randint(min_number, max_number)
-            # b2 = randint(min_number, max_number)
+            if not real_soln:
+                # first decide the solution, then get the rhs
+                x = randint(min_x_number, max_x_number)
+                y = randint(min_y_number, max_y_number)
+                b1 = a11 * x + a12 * y
+                b2 = a21 * x + a22 * y
+            else:
+                # solution for any rhs
+                b1 = randint(-min_number, max_number)
+                b2 = randint(min_number, max_number)
+                determinant = a11 * a22 - a12 * a21
+                x = (1./determinant) * (a22 * b1 - a12 * b2)
+                y = (1./determinant) * (-a21 * b1 + a11 * b2)
+                x = round(x, 2)
+                y = round(y, 2)
+                # adjust the rhs
+                b1 = a11 * x + a12 * y
+                b2 = a21 * x + a22 * y
+
             samples.append((a11, a12, a21, a22, b1, b2, x, y))
 
     # Check the samples for correctness
     for sample in tqdm(samples, total=len(samples)):
         a11, a12, a21, a22, b1, b2, x0, y0 = sample
-        delta = a11 * a22 - a12 * a21
-        assert delta != 0, 'Determinant is equal to 0!!'
-        x = (1./delta) * (a22 * b1 - a12 * b2)
-        y = (1./delta) * (-a21 * b1 + a11 * b2)
+        determinant = a11 * a22 - a12 * a21
+        assert determinant != 0, 'Determinant is equal to 0!!'
+        x = (1./determinant) * (a22 * b1 - a12 * b2)
+        y = (1./determinant) * (-a21 * b1 + a11 * b2)
         eq1 = a11 * x + a12 * y - b1
         eq2 = a21 * x + a22 * y - b2
-        assert abs(eq1) < 1e-06, f'Equation-1: {eq1}'
-        assert abs(eq2) < 1e-06, f'Equation-2: {eq2}'
-        assert abs(x-x0) < 1e-06, f'X: {x} != {x0}'
-        assert abs(y-y0) < 1e-06, f'Y: {y} != {y0}'
+        assert abs(eq1) < tolerance, f'Equation-1: {eq1}'
+        assert abs(eq2) < tolerance, f'Equation-2: {eq2}'
+        assert abs(x-x0) < tolerance, f'X: {x} != {x0}'
+        assert abs(y-y0) < tolerance, f'Y: {y} != {y0}'
         df['A'].append(f"[{a11}, {a12}, {a21}, {a22}]")
         df['b'].append(f"[{b1}, {b2}]")
         df['x'].append(f"[{x:.0f}, {y:.0f}]")
@@ -97,6 +114,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_size', type=int, default=327680)
     parser.add_argument('--test_size', type=int, default=1024)
     parser.add_argument('--template_type', type=str, default='base')
+    parser.add_argument('--complexity', type=str, default='integer')
 
     args = parser.parse_args()
 
@@ -104,8 +122,25 @@ if __name__ == '__main__':
     TRAIN_SIZE = args.train_size
     TEST_SIZE = args.test_size
 
-    train_dataset = gen_dataset(num_samples=TRAIN_SIZE, seed_value=100)
-    test_dataset = gen_dataset(num_samples=TEST_SIZE, seed_value=200)
+    if args.complexity == "integer":
+        # Make one type of dataset
+        train_dataset = gen_dataset(num_samples=TRAIN_SIZE, seed_value=100, real_soln=False)
+        test_dataset = gen_dataset(num_samples=TEST_SIZE, seed_value=200, real_soln=False)
+
+    elif args.complexity == "float":
+        train_dataset = gen_dataset(num_samples=TRAIN_SIZE, seed_value=100, real_soln=True)
+        test_dataset = gen_dataset(num_samples=TEST_SIZE, seed_value=200, real_soln=True)
+
+    elif args.complexity == "mixed":
+        # Make a combination of difficulties
+        train_dataset = gen_dataset(num_samples=TRAIN_SIZE//2, seed_value=100, real_soln=True)
+        test_dataset = gen_dataset(num_samples=TEST_SIZE//2, seed_value=200, real_soln=True)
+        train_dataset_2 = gen_dataset(num_samples=TRAIN_SIZE//2, seed_value=100, real_soln=False)
+        test_dataset_2 = gen_dataset(num_samples=TEST_SIZE//2, seed_value=200, real_soln=False)
+        for k in train_dataset:
+            train_dataset[k] += train_dataset_2[k]
+        for k in test_dataset:
+            test_dataset[k] += test_dataset_2[k]
 
     train_dataset = Dataset.from_dict(train_dataset)
     test_dataset = Dataset.from_dict(test_dataset)
