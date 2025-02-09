@@ -15,7 +15,10 @@ def extract_equation(numbers_str):
         match = re.findall(coeff_pattern, numbers_str)
         matches = list(match)
         coeffs = eval(matches[0], {"__builtins__": None}, {})
-        rhs = eval(matches[1], {"__builtins__": None}, {})
+        if len(matches) > 1:
+            rhs = eval(matches[1], {"__builtins__": None}, {})
+        else:
+            rhs = []
         return coeffs, rhs
     except Exception as e:
         print(e)
@@ -25,7 +28,9 @@ def extract_equation(numbers_str):
         print(matches)
 
 def extract_solution(solution_str):
-    """Extract the equation from the solution string."""
+    """Extract the solution from the generated string.
+    Returning another string not a python list.
+    """
     # Remove everything before the first "Assistant:"
     if "Assistant:" in solution_str:
         solution_str = solution_str.split("Assistant:", 1)[1]
@@ -50,11 +55,11 @@ def validate_solution(solution):
     return len(solution) == 2
 
 
-def evaluate_equation(equation_str):
-    """Safely evaluate the arithmetic equation using eval() with precautions."""
+def evaluate_solution(equation_str):
+    """Safely evaluate the solution using eval() with precautions."""
     try:
         # Define a regex pattern that only allows numbers, operators, square bracket, comma, and whitespace
-        allowed_pattern = r'^\[[\d,\.\s\-+]+\]'
+        allowed_pattern = r'^\[[\d,\.\s\-+/]+\]'
         if not re.match(allowed_pattern, equation_str):
             raise ValueError("Invalid characters in equation.")
 
@@ -79,6 +84,9 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0.1,
         "numbers": f"A: {example['A']}, b: {example['b']}"
         Example: 'numbers': 'A: [6, 27, 95, 442], b: [4, 19]',
                  'target': '[14.425, -3.057]'
+        Or, for cubic equation:
+            {'numbers': 'A: [1, -18, -88, 1920]',
+             'target': '[12, -10, 16]'}
     """
     THRESHOLD = 1e-1  # 1e-5
     target_str = ground_truth['target']
@@ -109,22 +117,41 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0.1,
 
     # Evaluate equation
     try:
-        soln = evaluate_equation(solution)
+        soln = evaluate_solution(solution)
         if soln is None:
             if do_print:
-                print(f"Could not evaluate the solution")
+                print(f"Could not evaluate the solution string: {solution}")
             return format_score
 
-        # Multiply the prediction by the coefficient matrix
-        result = [coeffs[0] * soln[0] + coeffs[1] * soln[1], coeffs[2] * soln[0] + coeffs[3] * soln[1]]
-        if abs(result[0] - rhs[0]) < THRESHOLD and abs(result[1] - rhs[1]) < THRESHOLD:  # Account for floating point precision
+        if len(rhs) == 0:
+            # cubic equation
+            part_score = format_score
+            flags = []
+            for s in soln:
+                residue = coeffs[0] * s**3 + coeffs[1] * s ** 2 + coeffs[2] * s + coeffs[3]
+                if abs(residue) < THRESHOLD:
+                    part_score += score/3.0
+                    flags.append(True)
+                else:
+                    flags.append(False)
+            part_score = min(score, part_score)
             if do_print:
-                print(f"Predicted solution: {solution} = {target}")
-            return score
+                if all(flags):
+                    print(f"MATCHED: predicted: {solution} = target: {target}")
+                else:
+                    print(f"WRONG: predicted: {solution}, target: {target}")
+            return part_score
         else:
-            if do_print:
-                print(f"Wrong result: predicted = {solution}, target = {target}")
-            return format_score
+            # Multiply the prediction by the coefficient matrix
+            result = [coeffs[0] * soln[0] + coeffs[1] * soln[1], coeffs[2] * soln[0] + coeffs[3] * soln[1]]
+            if abs(result[0] - rhs[0]) < THRESHOLD and abs(result[1] - rhs[1]) < THRESHOLD:  # Account for floating point precision
+                if do_print:
+                    print(f"MATCHED: predicted: {solution} = target: {target}")
+                return score
+            else:
+                if do_print:
+                    print(f"WRONG: predicted: {solution}, target: {target}")
+                return format_score
     except:
         if do_print:
             print(f"Error evaluating equation")
