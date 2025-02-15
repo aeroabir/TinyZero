@@ -5,29 +5,6 @@ import operator
 import sys
 
 
-def extract_equation(numbers_str):
-    """Extract the coefficients of the linear equations
-        It will appear like
-        "numbers": f"A: {example['A']}, b: {example['b']}"
-        Example: 'numbers': 'A: [6, 27, 95, 442], b: [4, 19]'
-    """
-    coeff_pattern = r'\[[\d,\.\s\-]+\]'
-    try:
-        match = re.findall(coeff_pattern, numbers_str)
-        matches = list(match)
-        coeffs = eval(matches[0], {"__builtins__": None}, {})
-        if len(matches) > 1:
-            rhs = eval(matches[1], {"__builtins__": None}, {})
-        else:
-            rhs = []
-        return coeffs, rhs
-    except Exception as e:
-        print(e)
-        print(f"Input: {numbers_str}")
-        match = re.findall(coeff_pattern, numbers_str)
-        matches = list(match)
-        print(matches)
-
 def extract_solution(solution_str):
     """Extract the solution from the generated string.
     Returning another string not a python list.
@@ -49,26 +26,6 @@ def extract_solution(solution_str):
     else:
         final_answer = None
     return final_answer
-
-
-def validate_solution(solution):
-    """Validate that the solution has only two numbers."""
-    return len(solution) == 2
-
-
-def evaluate_solution(equation_str):
-    """Safely evaluate the solution using eval() with precautions."""
-    try:
-        # Define a regex pattern that only allows numbers, operators, square bracket, comma, and whitespace
-        allowed_pattern = r'^\[[\d,\.\s\-+/]+\]'
-        if not re.match(allowed_pattern, equation_str):
-            raise ValueError("Invalid characters in equation.")
-
-        # Evaluate the equation with restricted globals and locals
-        result = eval(equation_str, {"__builtins__": None}, {})
-        return result
-    except Exception as e:
-        return None
 
 
 def prepare_prediction(elements: list):
