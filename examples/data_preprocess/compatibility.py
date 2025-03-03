@@ -35,9 +35,15 @@ def read_dataset(
     all_data = all_data.sample(n=num_samples)
     df = {'prompt': [], 'response': [], 'gt': []}
     for _, row in all_data.iterrows():
-        df['prompt'].append(row['prompt'][0]['content'])
-        df['response'].append(row['completion'][0]['content'])
-        df['gt'].append(row['gt'])
+        if 'prompt' in row:
+            df['prompt'].append(row['prompt'][0]['content'])
+            df['response'].append(row['completion'][0]['content'])
+            df['gt'].append(row['gt'])
+        elif 'messages' in row:
+            # SFT type data
+            df['prompt'].append(row['messages'][0]['content'])
+            df['response'].append(row['messages'][1]['content'])
+            df['gt'].append(row['messages'][1]['content'])
 
     return df
 
@@ -58,32 +64,41 @@ Assistant: Let me solve this step by step.
 
 
 if __name__ == '__main__':
+    ## Usage:
+    ## python ./examples/data_preprocess/compatibility.py --train_size 14272 --dev_size 1352 --test_size 2894
     parser = argparse.ArgumentParser()
     parser.add_argument('--local_dir', default='/home/azureuser/localfiles/data/polyvore_cp')
     parser.add_argument('--train_file', default='compatibility_text_based_grpo_train_14272.jsonl')
     parser.add_argument('--dev_file', default='compatibility_text_based_grpo_dev_1352.jsonl')
-    parser.add_argument('--test_file', default='compatibility_text_based_grpo_test_73213.jsonl')
+    parser.add_argument('--test_file', default='compatibility_text_based_sft_test_2894.jsonl')
     parser.add_argument('--hdfs_dir', default=None)
     parser.add_argument('--train_size', type=int, default=10000)
-    parser.add_argument('--test_size', type=int, default=1000)
+    parser.add_argument('--dev_size', type=int, default=1000)
+    parser.add_argument('--test_size', type=int, default=2000)
     parser.add_argument('--template_type', type=str, default='base')
 
     args = parser.parse_args()
 
     data_source = 'polyvore'
     TRAIN_SIZE = args.train_size
+    DEV_SIZE = args.dev_size
     TEST_SIZE = args.test_size
+
     train_file = os.path.join(args.local_dir, args.train_file)
     dev_file = os.path.join(args.local_dir, args.dev_file)
+    test_file = os.path.join(args.local_dir, args.test_file)
 
     train_dataset = read_dataset(num_samples=TRAIN_SIZE, seed_value=100, file_name=train_file)
-    dev_dataset = read_dataset(num_samples=TEST_SIZE, seed_value=200, file_name=dev_file)
+    dev_dataset = read_dataset(num_samples=DEV_SIZE, seed_value=200, file_name=dev_file)
+    test_dataset = read_dataset(num_samples=TEST_SIZE, seed_value=200, file_name=test_file)
 
     train_dataset = Dataset.from_dict(train_dataset)
     dev_dataset = Dataset.from_dict(dev_dataset)
+    test_dataset = Dataset.from_dict(test_dataset)
 
     assert len(train_dataset['prompt']) >= TRAIN_SIZE
-    assert len(dev_dataset['prompt']) >= TEST_SIZE
+    assert len(dev_dataset['prompt']) >= DEV_SIZE
+    assert len(test_dataset['prompt']) >= TEST_SIZE
 
     def make_map_fn(split):
         def process_fn(example, idx):
@@ -113,12 +128,14 @@ if __name__ == '__main__':
 
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     dev_dataset = dev_dataset.map(function=make_map_fn('test'), with_indices=True)
+    test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
 
     local_dir = args.local_dir
     hdfs_dir = args.hdfs_dir
 
     train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
-    dev_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
+    dev_dataset.to_parquet(os.path.join(local_dir, 'dev.parquet'))
+    test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
 
     if hdfs_dir is not None:
         makedirs(hdfs_dir)

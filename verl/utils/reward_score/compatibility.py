@@ -52,18 +52,18 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0.1,
     if do_print:
         print(f"--------------------------------")
         print(f"Solution string: {solution_str}")
-        print(f"Extracted equation: {equation}")
-        print(f"Target: {target}")
+        print(f"Extracted label: {equation}")
+        print(f"Target label: {target}")
 
     if equation is None:
         if do_print:
-            print(f"No equation found")
+            print(f"No prediction found")
         return 0
 
     # Validate equation uses correct numbers
     if not validate_equation(equation):
         if do_print:
-            print(f"Invalid equation")
+            print(f"Invalid prediction")
         return format_score
 
     # Evaluate equation
@@ -71,18 +71,18 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0.1,
         result = evaluate_equation(equation)
         if result is None:
             if do_print:
-                print(f"Could not evaluate equation")
+                print(f"Could not evaluate the prediction")
             return format_score
 
         if result.lower() == target.lower():
             if do_print:
-                print(f"Correct equation: {target} = {result}")
+                print(f"Correct prediction: {target} == {result}")
             return score
         else:
             if do_print:
-                print(f"Wrong result: equation = {result}, target = {target}")
+                print(f"Wrong prediction: {result}, target: {target}")
             return format_score
     except:
         if do_print:
-            print(f"Error evaluating equation")
+            print(f"Error evaluating generated response")
         return format_score

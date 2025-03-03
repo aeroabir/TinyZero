@@ -369,8 +369,23 @@ class RayPPOTrainer(object):
                                          drop_last=True,
                                          collate_fn=collate_fn)
 
+        self.test_dataset = RLHFDataset(parquet_files=self.config.data.test_files,
+                                        tokenizer=self.tokenizer,
+                                        prompt_key=self.config.data.prompt_key,
+                                        max_prompt_length=self.config.data.max_prompt_length,
+                                        filter_prompts=True,
+                                        return_raw_chat=self.config.data.get('return_raw_chat', False),
+                                        truncation='error')
+        self.test_dataloader = DataLoader(dataset=self.test_dataset,
+                                          batch_size=self.config.data.train_batch_size,
+                                          shuffle=False,
+                                          drop_last=False,
+                                          collate_fn=collate_fn)
+
+
         assert len(self.train_dataloader) >= 1
         assert len(self.val_dataloader) >= 1
+        assert len(self.test_dataloader) >= 1
 
         print(f'Size of train dataloader: {len(self.train_dataloader)}')
         print(f'Size of val dataloader: {len(self.val_dataloader)}')
@@ -440,6 +455,60 @@ class RayPPOTrainer(object):
             metric_dict[f'val/test_score/{data_source}'] = np.mean(rewards)
 
         return metric_dict
+
+
+    def _test(self):
+        reward_tensor_lst = []
+        data_source_lst = []
+        for test_data in self.test_dataloader:
+            test_batch = DataProto.from_single_dict(test_data)
+            # test_batch = test_batch.to('cuda')
+
+            # we only do validation on rule-based rm
+            if self.config.reward_model.enable and test_batch[0].non_tensor_batch['reward_model']['style'] == 'model':
+                return {}
+
+            test_gen_batch = test_batch.pop(['input_ids', 'attention_mask', 'position_ids'])
+            test_gen_batch.meta_info = {
+                'eos_token_id': self.tokenizer.eos_token_id,
+                'pad_token_id': self.tokenizer.pad_token_id,
+                'recompute_log_prob': False,
+                'do_sample': False,
+                'validate': True,
+            }
+
+            # pad to be divisible by dp_size
+            test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, self.actor_rollout_wg.world_size)
+            test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
+            # unpad
+            test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
+            print('test generation end')
+
+            test_batch = test_batch.union(test_output_gen_batch)
+
+            # evaluate using reward_function
+            # for certain reward function (e.g. sandbox), the generation can overlap with reward
+            reward_tensor = self.val_reward_fn(test_batch)
+
+            reward_tensor_lst.append(reward_tensor)
+            data_source_lst.append(test_batch.non_tensor_batch.get('data_source', ['unknown'] * reward_tensor.shape[0]))
+
+        reward_tensor = torch.cat(reward_tensor_lst, dim=0).sum(-1).cpu()  # (batch_size,)
+        data_sources = np.concatenate(data_source_lst, axis=0)
+        # evaluate test_score based on data source
+        data_source_reward = {}
+        for i in range(reward_tensor.shape[0]):
+            data_source = data_sources[i]
+            if data_source not in data_source_reward:
+                data_source_reward[data_source] = []
+            data_source_reward[data_source].append(reward_tensor[i].item())
+
+        metric_dict = {}
+        for data_source, rewards in data_source_reward.items():
+            metric_dict[f'test/test_score/{data_source}'] = np.mean(rewards)
+
+        return metric_dict
+
 
     def init_workers(self):
         """Init resource pool and worker group"""
@@ -512,6 +581,7 @@ class RayPPOTrainer(object):
         # we should create rollout at the end so that vllm can have a better estimation of kv cache memory
         self.actor_rollout_wg = all_wg['actor_rollout']
         self.actor_rollout_wg.init_model()
+
 
     def _save_checkpoint(self):
         actor_local_path = os.path.join(self.config.trainer.default_local_dir, 'actor',
@@ -663,7 +733,9 @@ class RayPPOTrainer(object):
                         self.global_steps % self.config.trainer.test_freq == 0:
                         with _timer('testing', timing_raw):
                             val_metrics: dict = self._validate()
+                            test_metrics: dict = self._test()
                         metrics.update(val_metrics)
+                        metrics.update(test_metrics)
 
                     if self.config.trainer.save_freq > 0 and \
                             self.global_steps % self.config.trainer.save_freq == 0:
@@ -681,9 +753,14 @@ class RayPPOTrainer(object):
 
                 if self.global_steps >= self.total_training_steps:
 
-                    # perform validation after training
+                    # perform validation & test after training
                     if self.val_reward_fn is not None:
                         val_metrics = self._validate()
                         pprint(f'Final validation metrics: {val_metrics}')
                         logger.log(data=val_metrics, step=self.global_steps)
+
+                        test_metrics = self._test()
+                        pprint(f'Test metrics: {test_metrics}')
+                        logger.log(data=test_metrics, step=self.global_steps)
+
                     return
