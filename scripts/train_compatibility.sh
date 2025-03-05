@@ -1,7 +1,7 @@
 python3 -m verl.trainer.main_ppo \
 data.train_files=$DATA_DIR/train.parquet \
 data.val_files=$DATA_DIR/dev.parquet \
-data.test_files=$DATA_DIR/test.parquet \
++data.test_files=$DATA_DIR/test.parquet \
 data.train_batch_size=256 \
 data.val_batch_size=32 \
 data.max_prompt_length=1024 \
@@ -28,4 +28,4 @@ trainer.save_freq=56 \
 trainer.test_freq=25 \
 trainer.project_name=compatibility \
 trainer.experiment_name=$EXPERIMENT_NAME \
-trainer.total_epochs=1 2>&1 | tee compatibility_phi3dot5.log
+trainer.total_epochs=1 2>&1 | tee compatibility_phi3dot5_v2.log
