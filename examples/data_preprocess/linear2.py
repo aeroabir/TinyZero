@@ -157,15 +157,16 @@ Assistant: Let me solve this step by step.
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--local_dir', default='~/data/countdown')
+    parser.add_argument('--local_dir', default='/home/azureuser/localfiles/data/linear2')
     parser.add_argument('--hdfs_dir', default=None)
+    parser.add_argument('--train_size', type=int, default=327680)
+    parser.add_argument('--dev_size', type=int, default=4000)
+    parser.add_argument('--test_size', type=int, default=1024)
     parser.add_argument('--num_samples', type=int, default=100000)
     parser.add_argument('--num_operands', type=int, default=6)
     parser.add_argument('--max_target', type=int, default=1000)
     parser.add_argument('--min_number', type=int, default=1)
     parser.add_argument('--max_number', type=int, default=100)
-    parser.add_argument('--train_size', type=int, default=327680)
-    parser.add_argument('--test_size', type=int, default=1024)
     parser.add_argument('--template_type', type=str, default='base')
     parser.add_argument('--complexity', type=str, default='integer')
 
@@ -173,20 +174,28 @@ if __name__ == '__main__':
 
     data_source = 'simlin2'
     TRAIN_SIZE = args.train_size
+    DEV_SIZE = args.dev_size
     TEST_SIZE = args.test_size
 
     if args.complexity == "integer":
         # Make one type of dataset
         train_dataset = gen_dataset(num_samples=TRAIN_SIZE, seed_value=100, real_soln=False)
+        dev_dataset = gen_dataset(num_samples=DEV_SIZE, seed_value=100, real_soln=False)
         test_dataset = gen_dataset(num_samples=TEST_SIZE, seed_value=200, real_soln=False)
 
     elif args.complexity == "float":
         train_dataset = gen_dataset(num_samples=TRAIN_SIZE, seed_value=100, real_soln=True)
+        dev_dataset = gen_dataset(num_samples=DEV_SIZE, seed_value=100, real_soln=True)
         test_dataset = gen_dataset(num_samples=TEST_SIZE, seed_value=200, real_soln=True)
 
     elif args.complexity == "mixed":
         # Make a combination of difficulties
         train_dataset = gen_dataset(num_samples=TRAIN_SIZE//3,
+                                    seed_value=100,
+                                    real_soln=True,
+                                    max_number=30,
+                                    tolerance=1e-01)
+        dev_dataset = gen_dataset(num_samples=DEV_SIZE//3,
                                     seed_value=100,
                                     real_soln=True,
                                     max_number=30,
@@ -201,6 +210,11 @@ if __name__ == '__main__':
                                       seed_value=100,
                                       max_number=30,
                                       real_soln=False)
+        dev_dataset_2 = gen_dataset(num_samples=DEV_SIZE//3,
+                                    seed_value=100,
+                                    real_soln=True,
+                                    max_number=30,
+                                    tolerance=1e-01)
         test_dataset_2 = gen_dataset(num_samples=TEST_SIZE//3,
                                      seed_value=200,
                                      max_number=30,
@@ -210,6 +224,11 @@ if __name__ == '__main__':
                                             min_number=10,
                                             max_number=30,
                                             seed_value=100)
+        dev_dataset_3 = gen_dataset(num_samples=DEV_SIZE//3,
+                                    seed_value=100,
+                                    real_soln=True,
+                                    max_number=30,
+                                    tolerance=1e-01)
         test_dataset_3 = gen_dataset_cubic(num_samples=TEST_SIZE//3+2,
                                            min_number=10,
                                            max_number=30,
@@ -217,14 +236,19 @@ if __name__ == '__main__':
         for k in train_dataset:
             train_dataset[k] += train_dataset_2[k]
             train_dataset[k] += train_dataset_3[k]
+        for k in dev_dataset:
+            dev_dataset[k] += dev_dataset_2[k]
+            dev_dataset[k] += dev_dataset_3[k]
         for k in test_dataset:
             test_dataset[k] += test_dataset_2[k]
             test_dataset[k] += test_dataset_3[k]
 
     train_dataset = Dataset.from_dict(train_dataset)
+    dev_dataset = Dataset.from_dict(dev_dataset)
     test_dataset = Dataset.from_dict(test_dataset)
 
     assert len(train_dataset['x']) >= TRAIN_SIZE, f"{len(train_dataset['x'])}, {TRAIN_SIZE}"
+    assert len(dev_dataset['x']) >= DEV_SIZE, f"{len(dev_dataset['x'])}, {DEV_SIZE}"
     assert len(test_dataset['x']) >= TEST_SIZE, f"{len(test_dataset['x'])}, {TEST_SIZE}"
 
     def make_map_fn(split):
@@ -264,12 +288,20 @@ if __name__ == '__main__':
         return process_fn
 
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
+    dev_dataset = dev_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
 
     local_dir = args.local_dir
     hdfs_dir = args.hdfs_dir
 
+    # save the datasets in json format for other models
+    train_dataset.to_json(os.path.join(local_dir, f'train_lin2_{len(train_dataset)}.json'))
+    dev_dataset.to_json(os.path.join(local_dir, f'dev_lin2_{len(dev_dataset)}.json'))
+    test_dataset.to_json(os.path.join(local_dir, f'test_lin2_{len(test_dataset)}.json'))
+
+    # now move to parquet
     train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
+    dev_dataset.to_parquet(os.path.join(local_dir, 'dev.parquet'))
     test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
 
     if hdfs_dir is not None:
