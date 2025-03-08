@@ -1,8 +1,9 @@
 python3 -m verl.trainer.main_ppo \
 data.train_files=$DATA_DIR/train.parquet \
-data.val_files=$DATA_DIR/test.parquet \
+data.val_files=$DATA_DIR/dev.parquet \
++data.test_files=$DATA_DIR/test.parquet \
 data.train_batch_size=256 \
-data.val_batch_size=1312 \
+data.val_batch_size=32 \
 data.max_prompt_length=256 \
 data.max_response_length=1024 \
 actor_rollout_ref.model.path=$BASE_MODEL \
@@ -20,10 +21,11 @@ algorithm.kl_ctrl.kl_coef=0.001 \
 trainer.logger=['wandb'] \
 +trainer.val_before_train=False \
 trainer.default_hdfs_dir=null \
+trainer.default_local_dir='/mnt/simlin_checkpoints' \
 trainer.n_gpus_per_node=$N_GPUS \
 trainer.nnodes=1 \
 trainer.save_freq=100 \
 trainer.test_freq=100 \
 trainer.project_name=TinyZero \
 trainer.experiment_name=$EXPERIMENT_NAME \
-trainer.total_epochs=15 2>&1 | tee verl_demo.log
+trainer.total_epochs=15 2>&1 | tee simlin2_phi3dot5_15e.log
